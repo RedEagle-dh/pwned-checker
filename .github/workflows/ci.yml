@@ -58,17 +58,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
-        target:
-          - runner
-          - migrator
         include:
           - platform: linux/amd64
+            target: runner
+            runner: ubuntu-latest
+            suffix: amd64
+          - platform: linux/amd64
+            target: migrator
             runner: ubuntu-latest
             suffix: amd64
           - platform: linux/arm64
+            target: runner
+            runner: ubuntu-24.04-arm
+            suffix: arm64
+          - platform: linux/arm64
+            target: migrator
             runner: ubuntu-24.04-arm
             suffix: arm64
 
@@ -180,4 +184,4 @@ jobs:
 
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}${{ matrix.tag_suffix }}
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
