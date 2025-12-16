@@ -1,7 +1,7 @@
 services:
-    postgres:
+    pwned-checker-db:
         image: postgres:16-alpine
-        container_name: pwned-checker-postgres
+        container_name: pwned-checker-db
         restart: unless-stopped
         environment:
             POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -10,23 +10,36 @@ services:
         volumes:
             - postgres_data:/var/lib/postgresql/data
         healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-pwned-checker}"]
+            test:
+                [
+                    "CMD-SHELL",
+                    "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-pwned-checker}",
+                ]
             interval: 10s
             timeout: 5s
             retries: 5
 
-    app:
+    pwned-checker-migrate:
+        image: ghcr.io/redeagle-dh/pwned-checker:migrate
+        container_name: pwned-checker-migrate
+        environment:
+            DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@pwned-checker-db:5432/${POSTGRES_DB:-pwned-checker}
+        depends_on:
+            pwned-checker-db:
+                condition: service_healthy
+
+    pwned-checker-app:
         image: ghcr.io/redeagle-dh/pwned-checker:latest
         container_name: pwned-checker-app
         restart: unless-stopped
         ports:
             - "3000:3000"
         environment:
-            DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-pwned-checker}
+            DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@pwned-checker-db:5432/${POSTGRES_DB:-pwned-checker}
             ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
         depends_on:
-            postgres:
-                condition: service_healthy
+            pwned-checker-migrate:
+                condition: service_completed_successfully
 
 volumes:
     postgres_data:
