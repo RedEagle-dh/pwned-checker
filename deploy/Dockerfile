@@ -1,69 +1,62 @@
-# Use Alpine for smaller base image
-FROM oven/bun:1.3-alpine AS base
-
-# Install dependencies only when needed
-FROM base AS deps
+# Build stage - install deps and build the app
+FROM oven/bun:1.3-alpine AS builder
 WORKDIR /app
 
-# Copy package files
+# Copy package files and prisma config
 COPY package.json bun.lockb* ./
 COPY prisma ./prisma/
+COPY prisma.config.ts ./
 
-# Install all dependencies (including dev for build)
+# Install all dependencies
 RUN bun install --frozen-lockfile
 
-# Rebuild the source code only when needed
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Copy source and build
 COPY . .
 
 # Generate Prisma client
-RUN bun run prisma generate
+RUN bun run prisma generate && echo 'export * from "./client";' > generated/prisma/index.ts
 
 # Build the application
 ENV SKIP_ENV_VALIDATION=1
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
 
-# Production dependencies only
-FROM base AS prod-deps
-WORKDIR /app
-COPY package.json bun.lockb* ./
-COPY prisma ./prisma/
-RUN bun install --frozen-lockfile --production && \
-    bun run prisma generate
-
-# Production image - use alpine for shell support (entrypoint)
+# Production image
 FROM oven/bun:1.3-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # Create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 -G nodejs nextjs
+RUN adduser --system --uid 1001 nextjs
 
-# Copy necessary files from builder
+# Copy public assets
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/prisma ./prisma
 
-# Copy only the generated Prisma client (not all node_modules)
-COPY --from=prod-deps /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=prod-deps /app/node_modules/@prisma/client ./node_modules/@prisma/client
-COPY --from=prod-deps /app/generated ./generated
+# Set correct permission for prerender cache
+RUN mkdir -p .next && chown nextjs:bun .next
+
+# Copy Next.js standalone output
+COPY --from=builder --chown=nextjs:bun /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:bun /app/.next/static ./.next/static
+
+# Copy generated Prisma client (Prisma 7 - lightweight, no binary engines)
+COPY --from=builder --chown=nextjs:bun /app/generated ./generated
+
+# Copy Prisma files for migrations
+COPY --from=builder --chown=nextjs:bun /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:bun /app/prisma.config.ts ./
 
 # Copy entrypoint script
-COPY deploy/docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+COPY --chown=nextjs:bun deploy/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 USER nextjs
 
 EXPOSE 3000
-
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["bun", "server.js"]
