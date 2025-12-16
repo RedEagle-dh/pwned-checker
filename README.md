@@ -7,6 +7,8 @@ A self-hosted web application to monitor your email addresses for data breaches 
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+<img src="https://github.com/RedEagle-dh/pwned-checker/blob/main/public/dashboard_screen.png" />
+
 ## Features
 
 - Monitor multiple email addresses for data breaches
@@ -16,12 +18,6 @@ A self-hosted web application to monitor your email addresses for data breaches 
 - Smart rate limiting based on your HIBP subscription RPM
 - Encrypted API key storage in database
 - Dark mode support
-
-## Screenshots
-
-| Dashboard                      | Emails                  | Breaches                     |
-| ------------------------------ | ----------------------- | ---------------------------- |
-| View stats and recent activity | Manage monitored emails | Browse all detected breaches |
 
 ## Tech Stack
 
