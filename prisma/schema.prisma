@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Email {
+  id            String        @id @default(cuid())
+  address       String        @unique
+  scanFrequency ScanFrequency @default(DAILY)
+  lastScannedAt DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  breaches      Breach[]
+  notifications Notification[]
+}
+
+model Breach {
+  id          String    @id @default(cuid())
+  emailId     String
+  email       Email     @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  name        String
+  title       String?
+  domain      String?
+  breachDate  DateTime?
+  addedDate   DateTime?
+  pwnCount    Int?
+  description String?   @db.Text
+  dataClasses String[]
+  isVerified  Boolean   @default(true)
+
+  discoveredAt DateTime     @default(now())
+  emailSentAt  DateTime?
+  status       BreachStatus @default(ACTIVE)
+
+  @@unique([emailId, name])
+  @@index([emailId])
+  @@index([emailSentAt])
+  @@index([status])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  emailId   String
+  email     Email            @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  type      NotificationType
+  message   String           @db.Text
+  isRead    Boolean          @default(false)
+  sentAt    DateTime         @default(now())
+
+  @@index([emailId])
+  @@index([isRead])
+}
+
+model ScanLog {
+  id            String     @id @default(cuid())
+  startedAt     DateTime   @default(now())
+  completedAt   DateTime?
+  emailsScanned Int        @default(0)
+  newBreaches   Int        @default(0)
+  errors        String?    @db.Text
+  status        ScanStatus @default(RUNNING)
+}
+
+model Settings {
+  id String @id @default("singleton")
+
+  // Encrypted API Keys (Base64 JSON with iv, authTag, encrypted)
+  hibpApiKeyEncrypted   String? @db.Text
+  resendApiKeyEncrypted String? @db.Text
+  notificationEmail     String?
+
+  // Cron Schedule Configuration
+  dailyScanHour   Int @default(6)
+  dailyScanMinute Int @default(0)
+  weeklyScanDay   Int @default(1) // 0=Sun, 1=Mon, etc.
+  weeklyScanHour  Int @default(6)
+  weeklyScanMinute Int @default(0)
+  monthlyScanDay   Int @default(1) // 1-28
+  monthlyScanHour  Int @default(6)
+  monthlyScanMinute Int @default(0)
+
+  // HIBP Subscription (cached)
+  hibpSubscriptionName      String?
+  hibpDescription           String?
+  hibpSubscribedUntil       DateTime?
+  hibpRpm                   Int?
+  hibpDomainSearchMax       Int?
+  hibpIncludesStealerLogs   Boolean  @default(false)
+  hibpSubscriptionUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ScanFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum NotificationType {
+  NEW_BREACH
+  SCAN_COMPLETE
+  SCAN_ERROR
+}
+
+enum ScanStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum BreachStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
